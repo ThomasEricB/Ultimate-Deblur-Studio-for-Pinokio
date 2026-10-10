@@ -1,0 +1,377 @@
+# Backend manifest. The master validates this strictly (see studio/registry.py)
+# and never imports anything from this folder - it only launches
+#   .venv/bin/python -m upscale_worker --adapter adapter:SpandrelAdapter ...
+schema_version = 1
+id = "spandrel"
+display_name = "PyTorch (Spandrel)"
+description = "One PyTorch environment that runs most single-image restoration architectures through spandrel: ESRGAN / Real-ESRGAN, SwinIR, Swin2SR, HAT, DAT, PLKSR for upscaling and NAFNet, Restormer, SCUNet, FBCNN for deblurring, denoising and JPEG cleanup. Larger install (PyTorch + CUDA)."
+protocol_version = "1.0"
+adapter = "adapter:SpandrelAdapter"
+python = "3.13"
+requirements = "requirements.txt"
+torch = true
+
+[resources]
+gpu = true
+estimated_vram_mb = 8000
+
+[capabilities]
+tta = true
+tiling = true
+gpu_id = true
+precision = true
+
+[custom_models]
+extensions = [".pth", ".safetensors", ".ckpt", ".pt"]
+pair = false
+
+
+[[models]]
+id = "realesrgan-x4plus"
+name = "Real-ESRGAN x4plus"
+description = "General-purpose 4x upscaler for real-world photos."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "BSD-3-Clause"
+commercial = true
+recommended = true
+
+[[models.files]]
+url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
+filename = "RealESRGAN_x4plus.pth"
+size = 67040989
+
+[[models]]
+id = "realesrgan-x2plus"
+name = "Real-ESRGAN x2plus"
+description = "General-purpose 2x upscaler for real-world photos."
+task = "upscale"
+scale = 2
+group = "Upscale"
+license = "BSD-3-Clause"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth"
+filename = "RealESRGAN_x2plus.pth"
+size = 67061725
+
+[[models]]
+id = "realesrgan-x4plus-anime-6b"
+name = "Real-ESRGAN x4plus Anime 6B"
+description = "Smaller Real-ESRGAN tuned for anime and illustrations."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "BSD-3-Clause"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+filename = "RealESRGAN_x4plus_anime_6B.pth"
+size = 17938799
+
+[[models]]
+id = "realesr-general-x4v3"
+name = "Real-ESRGAN General v3"
+description = "Tiny, fast Real-ESRGAN (Compact) for general scenes."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "BSD-3-Clause"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
+filename = "realesr-general-x4v3.pth"
+size = 4885111
+
+[[models]]
+id = "4x-ultrasharp"
+name = "4x-UltraSharp"
+description = "Kim2091's sharp ESRGAN for natural images (the PyTorch original of Upscayl's Ultrasharp)."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+
+[[models.files]]
+url = "https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.safetensors"
+filename = "4x-UltraSharp.safetensors"
+size = 66864028
+sha256 = "36a340b5509b699d2c06cb445ddc1d3d39199ac734d889ed6d7915f60e05bcbc"
+
+[[models]]
+id = "swinir-l-realsr-x4-gan"
+name = "SwinIR-L Real-World x4 (GAN)"
+description = "Large SwinIR transformer for real-world photo super-resolution."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "Apache-2.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth"
+filename = "003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth"
+size = 142473939
+
+[[models]]
+id = "swin2sr-realworld-x4"
+name = "Swin2SR Real-World x4"
+description = "Swin2SR transformer for compressed real-world images."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "Apache-2.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/mv-lab/swin2sr/releases/download/v0.0.1/Swin2SR_RealworldSR_X4_64_BSRGAN_PSNR.pth"
+filename = "Swin2SR_RealworldSR_X4_64_BSRGAN_PSNR.pth"
+size = 68617773
+
+[[models]]
+id = "4x-ultrasharp-v2"
+name = "4x-UltraSharpV2 (DAT2)"
+description = "Kim2091's 2025 successor to UltraSharp: photos, anime, CGI, text; also removes compression and halos."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+
+[[models.files]]
+url = "https://huggingface.co/Kim2091/UltraSharpV2/resolve/main/4x-UltraSharpV2.safetensors"
+filename = "4x-UltraSharpV2.safetensors"
+size = 139792588
+sha256 = "2b5db674aa8f3864a696dccd1d07d7cc0500fbf220f35044cd30eee9a7f971a7"
+
+[[models]]
+id = "4x-ultrasharp-v2-lite"
+name = "4x-UltraSharpV2 Lite (RealPLKSR)"
+description = "Fast RealPLKSR version of UltraSharpV2."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+
+[[models.files]]
+url = "https://huggingface.co/Kim2091/UltraSharpV2/resolve/main/4x-UltraSharpV2_Lite.safetensors"
+filename = "4x-UltraSharpV2_Lite.safetensors"
+size = 29590776
+sha256 = "7a330ef6b7c632477d311ac03499c91c350e35c5986d4a6c295f0628cb871a09"
+
+[[models]]
+id = "4xbhi-dat2-real"
+name = "4xBHI DAT2 Real"
+description = "Phhofm's DAT2 photo upscaler trained on real degradations (successor to 4xNomos8kDAT)."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "CC BY 4.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/Phhofm/models/releases/download/4xBHI_dat2_real/4xBHI_dat2_real.safetensors"
+filename = "4xBHI_dat2_real.safetensors"
+size = 139792588
+
+[[models]]
+id = "4xbhi-small-hat-l"
+name = "4xBHI HAT-L"
+description = "Phhofm's large HAT photo upscaler (2025). Slow, very high quality."
+task = "upscale"
+scale = 4
+group = "Upscale"
+license = "CC BY 4.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/Phhofm/models/releases/download/4xBHI_small_hat-l/4xBHI_small_hat-l.safetensors"
+filename = "4xBHI_small_hat-l.safetensors"
+size = 165299372
+
+[[models]]
+id = "nafnet-gopro-w64"
+name = "NAFNet GoPro (motion deblur)"
+description = "Removes camera-shake / motion blur. Output stays the same size."
+task = "deblur"
+scale = 1
+group = "Deblur"
+license = "MIT"
+commercial = true
+recommended = true
+
+[[models.files]]
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-GoPro-width64.pth"
+filename = "NAFNet-GoPro-width64.pth"
+size = 271778961
+sha256 = "329d3ab4077b8d6b7ff61de376e483714667960bf85be027bf4335cda701196f"
+
+[[models]]
+id = "nafnet-reds-w64"
+name = "NAFNet REDS (deblur + JPEG)"
+description = "Motion deblur trained with JPEG artifacts - good for blurry, compressed frames."
+task = "deblur"
+scale = 1
+group = "Deblur"
+license = "MIT"
+commercial = true
+
+[[models.files]]
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-REDS-width64.pth"
+filename = "NAFNet-REDS-width64.pth"
+size = 271756689
+sha256 = "175fe8b3cdf3abedfbc87769779c3d9f491e05bb2e73ea9d627883f90a4b2df3"
+
+[[models]]
+id = "restormer-motion-deblur"
+name = "Restormer Motion Deblurring"
+description = "Transformer motion-deblur model (GoPro). Heavy - tiling is used automatically."
+task = "deblur"
+scale = 1
+group = "Deblur"
+license = "See swz30/Restormer license"
+
+[[models.files]]
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/motion_deblurring.pth"
+filename = "restormer_motion_deblurring.pth"
+size = 104700429
+
+[[models]]
+id = "restormer-defocus-deblur"
+name = "Restormer Defocus Deblurring"
+description = "Fixes out-of-focus (defocus) blur from a single image."
+task = "deblur"
+scale = 1
+group = "Deblur"
+license = "See swz30/Restormer license"
+
+[[models.files]]
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/single_image_defocus_deblurring.pth"
+filename = "restormer_single_image_defocus_deblurring.pth"
+size = 104700429
+
+[[models]]
+id = "4xbhi-dat2-multiblurjpg"
+name = "4xBHI DAT2 MultiBlur+JPG (deblur & upscale)"
+description = "Upscales 4x while removing blur and JPEG artifacts in one pass."
+task = "deblur"
+scale = 4
+group = "Deblur"
+license = "CC BY 4.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/Phhofm/models/releases/download/4xBHI_dat2_multiblurjpg/4xBHI_dat2_multiblurjpg.safetensors"
+filename = "4xBHI_dat2_multiblurjpg.safetensors"
+size = 139792588
+
+[[models]]
+id = "4xbhi-realplksr-multiblur"
+name = "4xBHI RealPLKSR MultiBlur (fast deblur & upscale)"
+description = "Fast 4x upscaler that also removes blur."
+task = "deblur"
+scale = 4
+group = "Deblur"
+license = "CC BY 4.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/Phhofm/models/releases/download/4xbhi_realplksr/4xBHI_realplksr_dysample_multiblur.safetensors"
+filename = "4xBHI_realplksr_dysample_multiblur.safetensors"
+size = 29641748
+
+[[models]]
+id = "scunet-real-psnr"
+name = "SCUNet Real Denoise (PSNR)"
+description = "Blind real-world denoiser; faithful, smooth result."
+task = "denoise"
+scale = 1
+group = "Denoise"
+license = "Apache-2.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_psnr.pth"
+filename = "scunet_color_real_psnr.pth"
+size = 71982841
+
+[[models]]
+id = "scunet-real-gan"
+name = "SCUNet Real Denoise (GAN)"
+description = "Blind real-world denoiser; crisper, more texture."
+task = "denoise"
+scale = 1
+group = "Denoise"
+license = "Apache-2.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_gan.pth"
+filename = "scunet_color_real_gan.pth"
+size = 71982835
+
+[[models]]
+id = "nafnet-sidd-w64"
+name = "NAFNet SIDD (denoise)"
+description = "Smartphone sensor-noise removal."
+task = "denoise"
+scale = 1
+group = "Denoise"
+license = "MIT"
+commercial = true
+
+[[models.files]]
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-SIDD-width64.pth"
+filename = "NAFNet-SIDD-width64.pth"
+size = 464154961
+sha256 = "cd685efaae01f7c4e9951f2deab05780079c8eb1e49ed664b72f6db04dabb445"
+
+[[models]]
+id = "restormer-real-denoise"
+name = "Restormer Real Denoising"
+description = "Transformer real-noise removal (SIDD)."
+task = "denoise"
+scale = 1
+group = "Denoise"
+license = "See swz30/Restormer license"
+
+[[models.files]]
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/real_denoising.pth"
+filename = "restormer_real_denoising.pth"
+size = 104611957
+
+[[models]]
+id = "1x-denoise-realplksr"
+name = "1xDeNoise RealPLKSR"
+description = "Phhofm's fast general denoiser."
+task = "denoise"
+scale = 1
+group = "Denoise"
+license = "CC BY 4.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/Phhofm/models/releases/download/1xDeNoise_realplksr_otf/1xDeNoise_realplksr_otf.safetensors"
+filename = "1xDeNoise_realplksr_otf.safetensors"
+size = 29486580
+
+[[models]]
+id = "fbcnn-color"
+name = "FBCNN JPEG Artifact Removal"
+description = "Removes blocking and ringing from JPEG-compressed images."
+task = "jpeg"
+scale = 1
+group = "JPEG cleanup"
+license = "Apache-2.0"
+commercial = true
+
+[[models.files]]
+url = "https://github.com/jiaxi-jiang/FBCNN/releases/download/v1.0/fbcnn_color.pth"
+filename = "fbcnn_color.pth"
+size = 287755111

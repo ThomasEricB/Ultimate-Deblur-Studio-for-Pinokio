@@ -1,0 +1,6 @@
+# Master (control plane) only. It never imports torch / ncnn / backend code:
+# every backend runs in its own venv under plugins/<id>/.venv.
+gradio==6.30.0
+pillow==12.3.0
+# Fallback uv binary for creating backend environments when uv is not on PATH.
+uv==0.13.0

@@ -1,0 +1,97 @@
+/* Deblur Studio - Upscayl's look (DaisyUI dark, violet primary, Poppins) on Gradio 6. */
+@font-face { font-family: "Poppins"; font-weight: 400; src: url("__FONTS__/Poppins-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Poppins"; font-weight: 500; src: url("__FONTS__/Poppins-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Poppins"; font-weight: 600; src: url("__FONTS__/Poppins-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Poppins"; font-weight: 700; src: url("__FONTS__/Poppins-Bold.ttf") format("truetype"); }
+
+footer { display: none !important; }
+
+/* ---- sidebar header / footer ---- */
+.ds-header { display: flex; align-items: center; gap: 12px; padding: 4px 4px 12px; text-decoration: none !important;
+  color: inherit !important; }
+.ds-header img { width: 56px; height: 56px; border-radius: 14px; }
+.ds-header h1 { font-size: 1.55rem; font-weight: 700; margin: 0; line-height: 1.1; }
+.ds-header h1 span { font-size: .7rem; font-weight: 500; opacity: .7; }
+.ds-header p { margin: 2px 0 0; opacity: .8; font-size: .9rem; }
+.ds-footer { text-align: center; font-size: .72rem; opacity: .55; padding: 10px 0 4px; }
+.ds-footer p { margin: 2px 0; }
+
+/* ---- steps ---- */
+.ds-step p, .ds-step { font-weight: 700 !important; font-size: .82rem !important; letter-spacing: .06em;
+  text-transform: uppercase; margin: 10px 0 0 !important; opacity: .9; }
+.ds-sub p { font-size: .85rem; margin: 0; opacity: .85; }
+#ds-go { font-size: 1.05rem; font-weight: 600; }
+#ds-logs textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+
+/* ---- status strip ---- */
+.ds-strip { display: flex; align-items: center; gap: 8px; font-size: .8rem; padding: 6px 12px; border-radius: 999px;
+  background: var(--background-fill-secondary); width: fit-content; opacity: .9; }
+.ds-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* ---- main ---- */
+.ds-card { border-radius: 14px !important; background: var(--background-fill-secondary) !important; padding: 14px !important; }
+#ds-input .image-container, #ds-input [data-testid="image"] { min-height: 60vh; }
+
+/* ProgressBar overlay (Upscayl's spinner card) */
+.ds-progress { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px; border-radius: 14px;
+  background: var(--background-fill-secondary); backdrop-filter: blur(12px); margin: 6vh auto 0; max-width: 420px; }
+.ds-spin { width: 54px; height: 54px; border-radius: 14px; animation: ds-spin 1.4s ease-in-out infinite; }
+@keyframes ds-spin { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(.88); } 100% { transform: rotate(360deg) scale(1); } }
+.ds-progress-batch { font-weight: 700; margin: 4px 0 0; }
+.ds-progress-msg { font-weight: 700; font-size: .95rem; margin: 0; text-align: center; white-space: pre-line; }
+.ds-progress-sub { font-size: .75rem; opacity: .55; margin: 0; animation: ds-pulse 1.6s ease-in-out infinite; }
+@keyframes ds-pulse { 50% { opacity: .2; } }
+#ds-stop { max-width: 420px; margin: 8px auto; }
+
+/* MoreOptionsDrawer stats */
+.ds-stats { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ds-stats-head { font-weight: 600; font-size: .8rem; letter-spacing: .06em; margin: 0 0 2px; }
+.ds-stat { padding: 10px 14px; border-radius: 10px; background: var(--background-fill-secondary); }
+.ds-stat-title { font-size: .78rem; opacity: .65; }
+.ds-stat-value { font-size: 1.35rem; font-weight: 700; }
+
+/* ---- one binder-style tab strip on top of everything ---- */
+:root { --ds-tab1: #8b5cf6; --ds-tab2: #6366f1; --ds-tab3: #0ea5e9; --ds-tab4: #10b981; --ds-tab5: #f59e0b; --ds-tab6: #f43f5e; }
+#ds-main-tabs { gap: 0 !important; }
+#ds-main-tabs > .tab-wrapper { padding: 0 12px; height: auto; background: transparent;
+  border-bottom: 1px solid var(--border-color-primary); }
+#ds-main-tabs > .tab-wrapper .tab-container { gap: 3px; align-items: flex-end; height: auto; padding-top: 6px; }
+#ds-main-tabs > .tab-wrapper button[role="tab"] {
+  --ds-c: var(--ds-tab1);
+  position: relative; margin-bottom: -1px; padding: 8px 20px 9px; height: auto;
+  border: 1px solid var(--border-color-primary); border-bottom: none; border-radius: 12px 12px 0 0;
+  background: var(--background-fill-secondary); color: var(--body-text-color-subdued);
+  font-weight: 500; font-size: .92rem; letter-spacing: .01em;
+  box-shadow: inset 0 3px 0 0 color-mix(in srgb, var(--ds-c) 55%, transparent),
+              inset 0 -8px 10px -8px rgba(0, 0, 0, .45);
+  transform: translateY(3px); transition: transform .15s ease, background .15s ease, color .15s ease;
+}
+#ds-main-tabs > .tab-wrapper button[role="tab"][data-tab-id="settings"] { --ds-c: var(--ds-tab2); }
+#ds-main-tabs > .tab-wrapper button[role="tab"][data-tab-id="models"] { --ds-c: var(--ds-tab3); }
+#ds-main-tabs > .tab-wrapper button[role="tab"][data-tab-id="envs"] { --ds-c: var(--ds-tab4); }
+#ds-main-tabs > .tab-wrapper button[role="tab"][data-tab-id="jobs"] { --ds-c: var(--ds-tab5); }
+#ds-main-tabs > .tab-wrapper button[role="tab"][data-tab-id="diag"] { --ds-c: var(--ds-tab6); }
+#ds-main-tabs > .tab-wrapper button[role="tab"]:hover { transform: translateY(1px); color: var(--body-text-color);
+  background: color-mix(in srgb, var(--ds-c) 10%, var(--background-fill-secondary)); }
+#ds-main-tabs > .tab-wrapper button[role="tab"].selected {
+  transform: none; z-index: 2; padding-top: 10px; color: var(--body-text-color); font-weight: 600;
+  background: var(--background-fill-primary);
+  box-shadow: inset 0 4px 0 0 var(--ds-c), 0 -4px 14px -6px color-mix(in srgb, var(--ds-c) 60%, transparent);
+}
+#ds-main-tabs > .tab-wrapper button[role="tab"]::after,
+#ds-main-tabs > .tab-wrapper button[role="tab"].selected::after { display: none !important; }
+#ds-main-tabs > .tabitem { background: var(--background-fill-primary); border: 1px solid var(--border-color-primary);
+  border-top: none; border-radius: 0 0 14px 14px; padding: 14px; }
+
+/* status strip floats at the right end of the tab strip (left of the drawer toggle) */
+#ds-status { position: absolute !important; top: 7px; right: 64px; z-index: 5; width: auto !important;
+  min-width: 0 !important; pointer-events: none; }
+@media (max-width: 1180px) { #ds-status { display: none; } }
+
+/* ---- left panel (Upscayl's sidebar) inside the Upscayl tab ---- */
+#ds-studio { gap: 14px; align-items: flex-start; }
+#ds-sidebar { max-width: 360px; background: var(--background-fill-secondary); border-radius: 12px; padding: 12px;
+  position: sticky; top: 8px; max-height: calc(100vh - 90px); overflow-y: auto; overflow-x: hidden; }
+#ds-side-top { align-items: flex-start; flex-wrap: nowrap; gap: 4px; }
+#ds-collapse { max-width: 34px; padding: 4px; }
+#ds-expand { max-width: 140px; }

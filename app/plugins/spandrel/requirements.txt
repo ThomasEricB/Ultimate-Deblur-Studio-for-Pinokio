@@ -1,0 +1,8 @@
+# PyTorch itself is installed first by the master from the right wheel index
+# for this machine (CUDA / ROCm / MPS / CPU) - see studio/environments.py.
+# upscale-protocol is installed by the master from ../../protocol.
+spandrel==0.4.2
+# Restormer (and other architectures with restrictive licenses) live here.
+spandrel-extra-arches==0.2.0
+numpy==2.5.3
+pillow==12.3.0

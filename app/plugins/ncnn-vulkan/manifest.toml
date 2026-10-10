@@ -1,0 +1,470 @@
+# Backend manifest. The master validates this strictly (see studio/registry.py)
+# and never imports anything from this folder - it only launches
+#   .venv/bin/python -m upscale_worker --adapter adapter:NcnnVulkanAdapter ...
+schema_version = 1
+id = "ncnn-vulkan"
+display_name = "NCNN Vulkan (Upscayl models)"
+description = "Runs Upscayl's NCNN models (.param/.bin) on the current upstream Tencent ncnn release through Vulkan - NVIDIA, AMD, Intel and Apple GPUs, no PyTorch. Small environment, fast install."
+protocol_version = "1.0"
+adapter = "adapter:NcnnVulkanAdapter"
+python = "3.13"
+requirements = "requirements.txt"
+torch = false
+
+[resources]
+gpu = true
+estimated_vram_mb = 2000
+
+[capabilities]
+tta = true
+tiling = true
+gpu_id = true
+precision = true
+
+[custom_models]
+# A custom NCNN model is a .param + .bin pair with the same stem.
+extensions = [".param", ".bin"]
+pair = true
+
+[[models]]
+id = "upscayl-standard-4x"
+name = "Upscayl Standard"
+description = "Suitable for most images."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "Upscayl (AGPL-3.0 app; see upscayl.org)"
+commercial = true
+recommended = true
+preview = "model-comparison/upscayl-standard-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/upscayl-standard-4x.param"
+filename = "upscayl-standard-4x.param"
+size = 116029
+sha256 = "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/upscayl-standard-4x.bin"
+filename = "upscayl-standard-4x.bin"
+size = 33424520
+sha256 = "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf"
+
+[[models]]
+id = "upscayl-lite-4x"
+name = "Upscayl Lite"
+description = "Suitable for most images. High-speed upscaling with minimal quality loss."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "Upscayl (AGPL-3.0 app; see upscayl.org)"
+commercial = true
+preview = "model-comparison/upscayl-lite-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/upscayl-lite-4x.param"
+filename = "upscayl-lite-4x.param"
+size = 5019
+sha256 = "22174924330297357434ad21ed0af7f4b820008d2a502b492754d130d4142714"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/upscayl-lite-4x.bin"
+filename = "upscayl-lite-4x.bin"
+size = 2435272
+sha256 = "85ee266b632a765a725425ba6a5620c088c8aa2939a03063b2d83b3462724cc1"
+
+[[models]]
+id = "high-fidelity-4x"
+name = "High Fidelity"
+description = "For all kinds of images with a focus on realistic details and smooth textures."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "Upscayl (AGPL-3.0 app; see upscayl.org)"
+commercial = true
+preview = "model-comparison/high-fidelity-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/high-fidelity-4x.param"
+filename = "high-fidelity-4x.param"
+size = 108039
+sha256 = "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/high-fidelity-4x.bin"
+filename = "high-fidelity-4x.bin"
+size = 33424520
+sha256 = "8a135402b4f39286121b76abb47601a6b7b7e8d4f3e999a5aaa45ed277824fb4"
+
+[[models]]
+id = "remacri-4x"
+name = "Remacri (Non-Commercial)"
+description = "For natural images. Added sharpness and detail. No commercial use."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+preview = "model-comparison/remacri-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/remacri-4x.param"
+filename = "remacri-4x.param"
+size = 140295
+sha256 = "859ecba5b3592ecf3e76c93bed65e9f627b5236dd696aae5a84ecf8c93ab65ce"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/remacri-4x.bin"
+filename = "remacri-4x.bin"
+size = 33424520
+sha256 = "a43be595c0d743314c30b50fe7ef188be0c61cc55c46ce81adb79ba4b3c3fb7a"
+
+[[models]]
+id = "ultramix-balanced-4x"
+name = "Ultramix (Non-Commercial)"
+description = "For natural images with a balance of sharpness and detail."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+preview = "model-comparison/ultramix-balanced-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/ultramix-balanced-4x.param"
+filename = "ultramix-balanced-4x.param"
+size = 140295
+sha256 = "859ecba5b3592ecf3e76c93bed65e9f627b5236dd696aae5a84ecf8c93ab65ce"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/ultramix-balanced-4x.bin"
+filename = "ultramix-balanced-4x.bin"
+size = 33424520
+sha256 = "171cae5968485d366b4fb575d232f98d117d94b766b15f22849cfccde40d2050"
+
+[[models]]
+id = "ultrasharp-4x"
+name = "Ultrasharp (Non-Commercial)"
+description = "For natural images with a focus on sharpness."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "CC BY-NC-SA 4.0"
+commercial = false
+preview = "model-comparison/ultrasharp-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/ultrasharp-4x.param"
+filename = "ultrasharp-4x.param"
+size = 116029
+sha256 = "0136ca83686809a8f17f7111f11b951e8db93610e24b7f4137c9ffe4dbc4a806"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/ultrasharp-4x.bin"
+filename = "ultrasharp-4x.bin"
+size = 33424520
+sha256 = "fb3e279d40d4cddb44db4e684d59e68d0aa39852c8cc14dc3f23ccc7e6eee9c1"
+
+[[models]]
+id = "digital-art-4x"
+name = "Digital Art"
+description = "For digital art and illustrations."
+task = "upscale"
+scale = 4
+group = "Upscayl"
+license = "Upscayl (AGPL-3.0 app; see upscayl.org)"
+commercial = true
+preview = "model-comparison/digital-art-4x"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/digital-art-4x.param"
+filename = "digital-art-4x.param"
+size = 30290
+sha256 = "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4"
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/upscayl/a00d55fee90e0f9435d5eaa86e76700df8199af8/resources/models/digital-art-4x.bin"
+filename = "digital-art-4x.bin"
+size = 8943500
+sha256 = "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc"
+
+[[models]]
+id = "4x_NMKD-Siax_200k"
+name = "4x_NMKD-Siax_200k"
+description = "Universal upscaler for clean and slightly compressed images (JPEG quality 75 or better)."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4x_NMKD-Siax_200k.param"
+filename = "4x_NMKD-Siax_200k.param"
+size = 108037
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4x_NMKD-Siax_200k.bin"
+filename = "4x_NMKD-Siax_200k.bin"
+size = 66793352
+
+[[models]]
+id = "4x_NMKD-Superscale-SP_178000_G"
+name = "4x_NMKD-Superscale-SP_178000_G"
+description = "Upscaling of clean (artifact-free) real-world images."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4x_NMKD-Superscale-SP_178000_G.param"
+filename = "4x_NMKD-Superscale-SP_178000_G.param"
+size = 108037
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4x_NMKD-Superscale-SP_178000_G.bin"
+filename = "4x_NMKD-Superscale-SP_178000_G.bin"
+size = 66793352
+
+[[models]]
+id = "RealESRGAN_General_WDN_x4_v3"
+name = "RealESRGAN_General_WDN_x4_v3"
+description = "Lightweight Real-ESRGAN v3 general model (wide and deep network)."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/RealESRGAN_General_WDN_x4_v3.param"
+filename = "RealESRGAN_General_WDN_x4_v3.param"
+size = 5019
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/RealESRGAN_General_WDN_x4_v3.bin"
+filename = "RealESRGAN_General_WDN_x4_v3.bin"
+size = 2435272
+
+[[models]]
+id = "RealESRGAN_General_x4_v3"
+name = "RealESRGAN_General_x4_v3"
+description = "Lightweight, fast Real-ESRGAN v3 general model."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/RealESRGAN_General_x4_v3.param"
+filename = "RealESRGAN_General_x4_v3.param"
+size = 5019
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/RealESRGAN_General_x4_v3.bin"
+filename = "RealESRGAN_General_x4_v3.bin"
+size = 2435272
+
+[[models]]
+id = "unknown-2.0.1"
+name = "unknown-2.0.1"
+description = "Shipped by accident in Upscayl v2.0.1 in place of UltraSharp - some people like it."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/unknown-2.0.1.param"
+filename = "unknown-2.0.1.param"
+size = 140295
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/unknown-2.0.1.bin"
+filename = "unknown-2.0.1.bin"
+size = 33424520
+
+[[models]]
+id = "uniscale_restore"
+name = "uniscale_restore"
+description = "Restoration-oriented upscaler by Kim2091."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/uniscale_restore.param"
+filename = "uniscale_restore.param"
+size = 108039
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/uniscale_restore.bin"
+filename = "uniscale_restore.bin"
+size = 33424520
+
+[[models]]
+id = "4xLSDIR"
+name = "4xLSDIR"
+description = "General photo upscaler by Phhofm."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIR.param"
+filename = "4xLSDIR.param"
+size = 108039
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIR.bin"
+filename = "4xLSDIR.bin"
+size = 33424520
+
+[[models]]
+id = "4xLSDIRplusC"
+name = "4xLSDIRplusC"
+description = "General photo upscaler by Phhofm, robust to JPEG compression."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIRplusC.param"
+filename = "4xLSDIRplusC.param"
+size = 108039
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIRplusC.bin"
+filename = "4xLSDIRplusC.bin"
+size = 33424520
+
+[[models]]
+id = "4xLSDIRCompactC3"
+name = "4xLSDIRCompactC3"
+description = "Compact (SRVGGNet) model by Phhofm - fast inference."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIRCompactC3.param"
+filename = "4xLSDIRCompactC3.param"
+size = 2767
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xLSDIRCompactC3.bin"
+filename = "4xLSDIRCompactC3.bin"
+size = 1247368
+
+[[models]]
+id = "4xNomos8kSC"
+name = "4xNomos8kSC"
+description = "Photo upscaler by Phhofm, trained on Nomos8k."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xNomos8kSC.param"
+filename = "4xNomos8kSC.param"
+size = 108039
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xNomos8kSC.bin"
+filename = "4xNomos8kSC.bin"
+size = 33424520
+
+[[models]]
+id = "4xHFA2k"
+name = "4xHFA2k"
+description = "Anime / illustration upscaler by Phhofm."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xHFA2k.param"
+filename = "4xHFA2k.param"
+size = 108039
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/4xHFA2k.bin"
+filename = "4xHFA2k.bin"
+size = 33424520
+
+[[models]]
+id = "realesr-animevideov3-x2"
+name = "realesr-animevideov3-x2"
+description = "Real-ESRGAN anime video model, 2x."
+task = "upscale"
+scale = 2
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x2.param"
+filename = "realesr-animevideov3-x2.param"
+size = 3173
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x2.bin"
+filename = "realesr-animevideov3-x2.bin"
+size = 1247368
+
+[[models]]
+id = "realesr-animevideov3-x3"
+name = "realesr-animevideov3-x3"
+description = "Real-ESRGAN anime video model, 3x."
+task = "upscale"
+scale = 3
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x3.param"
+filename = "realesr-animevideov3-x3.param"
+size = 3173
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x3.bin"
+filename = "realesr-animevideov3-x3.bin"
+size = 1247368
+
+[[models]]
+id = "realesr-animevideov3-x4"
+name = "realesr-animevideov3-x4"
+description = "Real-ESRGAN anime video model, 4x."
+task = "upscale"
+scale = 4
+group = "Upscayl custom-models"
+license = "See upscayl/custom-models credits"
+commercial = true
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x4.param"
+filename = "realesr-animevideov3-x4.param"
+size = 3077
+
+[[models.files]]
+url = "https://raw.githubusercontent.com/upscayl/custom-models/4b6d2cfa59c7442af115dfc6e50fd8d7d40b96ef/models/realesr-animevideov3-x4.bin"
+filename = "realesr-animevideov3-x4.bin"
+size = 1247368
+

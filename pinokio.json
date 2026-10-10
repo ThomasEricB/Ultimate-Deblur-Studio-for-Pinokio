@@ -1,0 +1,5 @@
+{
+  "title": "Deblur Studio",
+  "description": "Upscayl, rebuilt in Gradio: AI image upscaling, deblurring and denoising with a built-in model manager and isolated backend environments.",
+  "icon": "icon.png"
+}

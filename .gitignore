@@ -1,0 +1,15 @@
+# Pinokio
+logs/
+# Master venv and per-backend venvs (recreated from requirements)
+app/env/
+app/plugins/*/.venv/
+# Downloaded weights, outputs, runtime spool, user state
+app/models/
+app/outputs/
+app/runtime/
+app/state/
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.DS_Store

@@ -1,0 +1,7 @@
+# Upstream Tencent ncnn (Vulkan-enabled wheels for Linux/Windows/macOS).
+# upscayl-ncnn's prebuilt upscayl-bin vendors an ncnn snapshot from 2022, so
+# this backend reimplements its Real-ESRGAN tiling pipeline on the current
+# release instead. upscale-protocol is installed by the master from ../../protocol.
+ncnn==1.0.20260526
+numpy==2.5.3
+pillow==12.3.0
