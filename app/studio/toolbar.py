@@ -197,10 +197,21 @@ function openFlyout(s, btn) {
   const shown = slotShown(s);
   flyout = document.createElement('div');
   flyout.className = 'pc-fly';
+  flyout.dataset.slot = String(s.index);
   flyout.innerHTML = s.tools.map((id) => {
     const t = PC.tools[id];
     return `<button class="pc-fly-item${id === shown ? ' cur' : ''}" data-tool="${id}">${icon(t.icon)}${t.label}${t.key ? `<span class="k">${t.key}</span>` : ''}</button>`;
   }).join('');
+  // Presses on the flyout are its own: before, they fell through to the canvas and ran the
+  // active tool there (a Single Row click added a row; a drag drew a clamped marquee).
+  flyout.addEventListener('pointerdown', (e) => e.stopPropagation());
+  // Press-and-hold on the tool, slide to an item, release: picks it (Photoshop's gesture).
+  // A plain click lands here too.
+  flyout.addEventListener('pointerup', (e) => {
+    const it = e.target.closest('.pc-fly-item');
+    e.stopPropagation();
+    if (it) { selectTool(it.dataset.tool); closeFlyout(); }
+  });
   root.appendChild(flyout);
   // Beside the tool, towards the canvas (the palette sits on the right, so open to its left).
   const br = btn.getBoundingClientRect(), rr = root.getBoundingClientRect();
@@ -231,15 +242,26 @@ pcRoot.addEventListener('contextmenu', (e) => {
 pcRoot.addEventListener('click', (e) => {
   e.stopPropagation();
   if (longPressed) { longPressed = false; return; }
-  const b = e.target.closest('[data-slot], [data-pc]');
+  const b = e.target.closest('[data-slot]');
   if (!b) return;
-  if (b.dataset.slot !== undefined) { selectTool(slotShown(slots[+b.dataset.slot])); return; }
-  if (b.dataset.pc === 'cols') { tb.double = !tb.double; tbSave(); renderToolbar(); relayout(); }
+  if (b.dataset.slot !== undefined) {
+    const sl = slots[+b.dataset.slot], r = b.getBoundingClientRect();
+    // The other tools of a group are one click away: click the active tool again, or its
+    // corner triangle (right-click and long-press work too, as in PhotoCraft/Photoshop).
+    const onTriangle = e.clientX >= r.right - 11 && e.clientY >= r.bottom - 11;
+    if (sl.tools.length > 1 && (onTriangle || sl.tools.includes(tb.tool))) {
+      if (flyout && flyout.dataset.slot === String(sl.index)) closeFlyout(); else openFlyout(sl, b);
+      return;
+    }
+    closeFlyout(); selectTool(slotShown(sl)); return;
+  }
 });
 root.addEventListener('click', (e) => {
   const item = e.target.closest('.pc-fly-item');
   if (item) { e.stopPropagation(); selectTool(item.dataset.tool); closeFlyout(); return; }
-  if (flyout && !e.target.closest('.pc-fly')) closeFlyout();
+  // Clicks on the palette are its own (it opens/toggles flyouts); this used to close the
+  // flyout a long-press had just opened, on the click that ends the press.
+  if (flyout && !e.target.closest('.pc-fly') && !pcRoot.contains(e.target)) closeFlyout();
 }, true);
 document.addEventListener('pointerdown', (e) => { if (flyout && !flyout.contains(e.target) && !pcRoot.contains(e.target)) closeFlyout(); });
 
@@ -254,7 +276,12 @@ function toolShortcut(e) {
   if (e.shiftKey && s && s.tools.includes(tb.tool)) {
     const cyc = s.tools.filter((id) => PC.tools[id].key === k);
     selectTool(cyc[(cyc.indexOf(tb.tool) + 1) % cyc.length]);
-  } else selectTool(s ? slotShown(s) : ids[0]);
+  } else {
+    // The key picks the group's current tool only if that tool owns the key (Single Row /
+    // Column have none, so M goes back to the rectangular marquee, as in Photoshop).
+    const shown = s ? slotShown(s) : ids[0];
+    selectTool(PC.tools[shown].key === k ? shown : ids[0]);
+  }
   return true;
 }
 function insetR() {
