@@ -21,7 +21,7 @@ from studio.logs import logit
 from studio.paths import ASSETS_DIR, JOBS_DIR, LOGS_DIR, MODELS_DIR, PLUGINS_DIR, STATE_DIR
 from studio.supervisor import supervisor
 from studio.ui import APP_NAME, VERSION, build
-from studio.viewer import file_url
+from studio.canvas import file_url
 
 
 def _shutdown(*_args) -> None:

@@ -50,6 +50,10 @@ class UpscaleRequest:
     copy_metadata: bool = False
     overwrite: bool = False
     output_dir: str = ""
+    # Canvas selection: a grayscale mask PNG the size of the image (the model only changes the
+    # selected pixels) and a crop [x, y, w, h] (only that area is output). Single images only.
+    mask_path: str = ""
+    crop: list[int] | None = None
 
 
 @dataclass
@@ -63,6 +67,11 @@ class ImageResult:
     seconds: float
     reused: bool = False
     notes: list[str] = field(default_factory=list)
+    orig_input: str = ""                 # the full normalised input (what selections refer to)
+    view_box: list[int] | None = None    # the part of it the output shows ([x, y, w, h]; None = all)
+    model_input: tuple[int, int] | None = None   # size of the image the model was fed
+    model_pixels: int = 0                         # how many of those pixels the user selected
+    focus: list[float] | None = None     # the selection's box in the output (fractions [x0, y0, x1, y1])
 
 
 def is_valid_image(path: str) -> bool:
@@ -89,7 +98,8 @@ def output_name(source: Path, req: UpscaleRequest) -> str:
     tag = _scale_tag(req)
     model_id = req.model.split("/", 1)[-1]
     restore = f"_{req.restore_model.split('/', 1)[-1]}" if req.restore_model else ""
-    return f"{source.stem}_upscaled_{tag}{restore}_{model_id}.{req.save_as}"
+    region = ("_sel" if req.mask_path else "") + ("_crop" if req.crop else "")
+    return f"{source.stem}_upscaled_{tag}{restore}_{model_id}{region}.{req.save_as}"
 
 
 def _normalize_input(src: Path, dst: Path) -> tuple[Image.Image, tuple[int, int]]:
@@ -179,20 +189,137 @@ def _run_passes(job_id: str, work: Path, source_png: Path, req: UpscaleRequest,
     return current
 
 
+def _load_mask(path: str, size: tuple[int, int]) -> Image.Image:
+    mask = Image.open(path).convert("L")
+    if mask.size != size:
+        mask = mask.resize(size, Image.Resampling.BILINEAR)
+    return mask
+
+
+def _clamp_crop(crop: list[int] | None, w: int, h: int) -> tuple[int, int, int, int] | None:
+    if not crop or len(crop) != 4:
+        return None
+    x, y, cw, ch = (int(round(float(v))) for v in crop)
+    box = (max(0, x), max(0, y), min(w, x + cw), min(h, y + ch))
+    if box[2] - box[0] < 2 or box[3] - box[1] < 2:
+        raise ValueError("The crop is empty or outside the image.")
+    return None if box == (0, 0, w, h) else box
+
+
+def _intersect(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:
+    box = (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+    return box if box[2] > box[0] and box[3] > box[1] else None
+
+
+def _box_blur(a, r: int):
+    """Separable box blur (radius r, edges clamped) of an H x W (x C) float array."""
+    import numpy as np
+    for axis in (0, 1):
+        n = a.shape[axis]
+        pad = [(0, 0)] * a.ndim
+        pad[axis] = (r + 1, r)
+        c = np.cumsum(np.pad(a, pad, mode="edge"), axis=axis)
+        hi = np.take(c, np.arange(2 * r + 1, 2 * r + 1 + n), axis=axis)
+        lo = np.take(c, np.arange(0, n), axis=axis)
+        a = (hi - lo) / (2 * r + 1)
+    return a
+
+
+def _model_input(full: Image.Image, mask: Image.Image | None, box: tuple[int, int, int, int]) -> Image.Image:
+    """The image the model is fed: `box` of the original where only selected pixels keep their
+    content. Unselected pixels inside the box are filled by pull-push extension of the selected
+    colours (mask-weighted blurs at doubling radii), so nothing the user left out reaches the
+    model, while the fill stays smooth enough not to create artificial edges at the selection
+    border."""
+    import numpy as np
+    region = full.crop(box)
+    if mask is None:
+        return region
+    m = np.asarray(mask.crop(box), dtype=np.float32) / 255.0
+    keep = m > 0                                   # any coverage = part of the selection
+    if keep.all():
+        return region
+    px = np.asarray(region, dtype=np.float32)
+    rgb = px if px.ndim == 3 else px[..., None]
+    w8 = keep.astype(np.float32)
+    fill = np.zeros_like(rgb)
+    done = np.zeros(keep.shape, dtype=bool)
+    r = 1
+    while not done.all() and r <= max(keep.shape) * 2:
+        num = _box_blur(rgb * w8[..., None], r)
+        den = _box_blur(w8, r)
+        ok = (den > 1e-4) & ~done
+        fill[ok] = num[ok] / den[ok][:, None]
+        done |= ok
+        r *= 2
+    out = np.where(keep[..., None], rgb, fill)
+    out = out[..., 0] if px.ndim == 2 else out
+    return Image.fromarray(np.clip(out + 0.5, 0, 255).astype(np.uint8), region.mode)
+
+
 def _process(job_id: str, work: Path, src: Path, req: UpscaleRequest, out_path: Path,
              progress: ProgressFn, cancel: threading.Event, base: float = 0.0, span: float = 1.0) -> ImageResult:
     started = time.perf_counter()
     source_png = work / "input" / "source.png"
     original, (w, h) = _normalize_input(src, source_png)
-    tw, th = target_size(w, h, req)
+    full_box = (0, 0, w, h)
+    crop = _clamp_crop(req.crop, w, h)
+    out_box = crop or full_box                       # the area that is output
+    ow, oh = out_box[2] - out_box[0], out_box[3] - out_box[1]
+    tw, th = target_size(ow, oh, req)
     if tw * th > MAX_OUTPUT_PIXELS:
         raise ValueError(f"output would be {tw}x{th} - over {MAX_OUTPUT_PIXELS // 1_000_000} MP. Lower the scale.")
-    raw = _run_passes(job_id, work, source_png, req, progress, cancel, base, span)
+    fx, fy = tw / ow, th / oh
+
+    # The model is fed only what the user selected: the selection's tight bounding box (inside
+    # the crop), with every unselected pixel in it replaced by colours extended from the selected
+    # ones (see _model_input). Without a selection: exactly the output area.
+    mask = _load_mask(req.mask_path, (w, h)) if req.mask_path else None
+    if mask is not None:
+        # Values of 1-2/255 are invisible in the composite; ignoring them keeps stray noise from
+        # widening the box the model is fed.
+        bbox = mask.point(lambda v: 255 if v > 2 else 0).getbbox()
+        if not bbox:
+            raise ValueError("The selection is empty.")
+        work_box = _intersect(bbox, out_box)
+        if work_box is None:
+            raise ValueError("The selection is outside the crop.")
+    else:
+        work_box = out_box
+    model_box = work_box
+    full = Image.open(source_png)
+    full.load()
+    model_in = source_png
+    if model_box != full_box or mask is not None:
+        model_in = work / "input" / "region.png"
+        _model_input(full, mask, model_box).save(model_in, format="PNG", compress_level=1)
+    selected_px = (sum(1 for v in mask.crop(model_box).getdata() if v) if mask is not None
+                   else (model_box[2] - model_box[0]) * (model_box[3] - model_box[1]))
+
+    raw = _run_passes(job_id, work, model_in, req, progress, cancel, base, span)
     progress(base + span * 0.99, "Scaling and converting image...")
-    img = Image.open(raw)
-    img.load()
-    if img.size != (tw, th):
-        img = img.resize((tw, th), Image.Resampling.LANCZOS)
+    res = Image.open(raw)
+    res.load()
+    # Where the model's area lands in the output (output origin = out_box origin).
+    mb = (round((model_box[0] - out_box[0]) * fx), round((model_box[1] - out_box[1]) * fy),
+          round((model_box[2] - out_box[0]) * fx), round((model_box[3] - out_box[1]) * fy))
+    size = (max(1, mb[2] - mb[0]), max(1, mb[3] - mb[1]))
+    if res.size != size:
+        res = res.resize(size, Image.Resampling.LANCZOS)
+    if mask is None:
+        img = res.crop((-mb[0], -mb[1], tw - mb[0], th - mb[1]))
+    else:
+        # Unselected pixels stay the original (resized to the output scale); selected ones take
+        # the model's result, blended through the selection's soft edge.
+        img = full.crop(out_box).resize((tw, th), Image.Resampling.LANCZOS)
+        if res.mode != img.mode:
+            res = res.convert(img.mode)
+        img.paste(res, mb[:2], mask.crop(model_box).resize(size, Image.Resampling.BILINEAR))
+
+    display_in = source_png
+    if crop:
+        display_in = work / "input" / "display.png"
+        full.crop(crop).save(display_in, format="PNG", compress_level=1)
     display = work / "output" / f"final.{req.save_as}"
     notes = _save_final(img, display, req, original)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -202,8 +329,12 @@ def _process(job_id: str, work: Path, src: Path, req: UpscaleRequest, out_path: 
     for f in (work / "output").glob("pass*.png"):
         f.unlink(missing_ok=True)
     return ImageResult(
-        source=str(src), display_input=str(source_png), display_output=str(display), saved_path=str(out_path),
-        in_size=(w, h), out_size=(tw, th), seconds=round(time.perf_counter() - started, 2), notes=notes,
+        source=str(src), display_input=str(display_in), display_output=str(display), saved_path=str(out_path),
+        in_size=(ow, oh), out_size=(tw, th), seconds=round(time.perf_counter() - started, 2), notes=notes,
+        orig_input=str(source_png), view_box=[crop[0], crop[1], ow, oh] if crop else None,
+        model_input=(model_box[2] - model_box[0], model_box[3] - model_box[1]), model_pixels=selected_px,
+        focus=[(model_box[0] - out_box[0]) / ow, (model_box[1] - out_box[1]) / oh,
+               (model_box[2] - out_box[0]) / ow, (model_box[3] - out_box[1]) / oh] if mask is not None else None,
     )
 
 
@@ -219,7 +350,7 @@ def run_image(src_path: str, req: UpscaleRequest, progress: ProgressFn, cancel: 
     job_id = jobs.new_id()
     work = jobs.job_dir(job_id)
 
-    if out_path.exists() and not req.overwrite:
+    if out_path.exists() and not req.overwrite and not req.mask_path and not req.crop:
         # Upscayl behaviour: reuse an existing result unless overwrite is on.
         source_png = work / "input" / "source.png"
         _normalize_input(src, source_png)
@@ -264,6 +395,7 @@ def batch_output_dir(folder_name: str, req: UpscaleRequest) -> Path:
 def run_batch(files: list[Path], folder_name: str, req: UpscaleRequest, progress: ProgressFn,
               cancel: threading.Event) -> tuple[Path, list[ImageResult], list[str]]:
     req.double = False  # Upscayl disables Double Upscayl in batch mode
+    req.mask_path, req.crop = "", None  # canvas selections belong to one image
     if not files:
         raise ValueError("Make sure that the folder contains PNG, JPG, JPEG or WEBP images.")
     out_dir = batch_output_dir(folder_name, req)

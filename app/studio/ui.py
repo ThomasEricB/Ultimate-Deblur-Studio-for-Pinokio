@@ -9,8 +9,8 @@ sidebar (collapsible)        ->  gr.Sidebar(position="left")
                                  upscayl + scale, output folder, Upscayl button
   SelectModelDialog          ->  "Browse models" gallery panel with before/after cards
   SettingsTab                ->  Settings tab (same controls, same order)
-main content                 ->  Studio tab: image drop zone / slider+lens viewer
-  ProgressBar (+ STOP)       ->  progress card + Stop button
+main content                 ->  editor canvas (studio/canvas.py): zoom/pan, drop/paste, slider+lens, progress
+  ProgressBar (+ STOP)       ->  canvas progress overlay with STOP
   MoreOptionsDrawer          ->  gr.Sidebar(position="right"): reset, lens/slider, zoom, stats
   OnboardingDialog           ->  first-run welcome card with one-click quick setup
 new                          ->  Model Manager, Environments, Jobs, Diagnostics tabs
@@ -24,12 +24,12 @@ import time
 from pathlib import Path
 
 import gradio as gr
-from PIL import Image
+from PIL import Image, ImageOps
 
-from . import downloads, environments, jobs, native, registry, settings, sysinfo, viewer
+from . import canvas, downloads, environments, jobs, native, registry, settings, sysinfo
 from .logs import logit, text as log_text
 from .paths import ASSETS_DIR, DEFAULT_OUTPUT_DIR, MODELS_DIR, RUNTIME_DIR
-from .pipeline import Cancelled, UpscaleRequest, collect_folder, run_batch, run_image
+from .pipeline import Cancelled, UpscaleRequest, collect_folder, is_valid_image, run_batch, run_image
 from .supervisor import WorkerError, supervisor
 
 APP_NAME = "Deblur Studio"
@@ -134,7 +134,7 @@ def status_strip() -> str:
 
 
 def header_html() -> str:
-    logo = viewer.file_url(str(ASSETS_DIR / "logo.png")).split("?")[0]
+    logo = canvas.file_url(str(ASSETS_DIR / "logo.png")).split("?")[0]
     return f"""
 <a class="ds-header" href="https://github.com/ThomasEricB/deblur-studio-for-pinokio" target="_blank" title="Star us on GitHub 😁">
   <img src="{logo}" alt="logo"/>
@@ -142,27 +142,16 @@ def header_html() -> str:
 </a>"""
 
 
+def step_head(n: int, title: str, hint: str) -> str:
+    """A left-panel section header: numbered badge, title and hint, ruled off from the step above."""
+    return (f'<div class="ds-stephead"><span class="ds-stephead-n">{n}</span>'
+            f'<div><span class="ds-stephead-k">Step {n}</span><b>{title}</b><small>{hint}</small></div></div>')
+
+
 FOOTER_HTML = f"""
 <div class="ds-footer">
   <p>Copyright © {time.strftime('%Y')} - <b>{APP_NAME}</b></p>
   <p>AI upscaling, deblurring &amp; restoration - runs locally</p>
-</div>"""
-
-
-def instructions_md(batch: bool) -> str:
-    if batch:
-        return ("### Select a Folder\nMake sure that the folder doesn't contain anything except PNG, JPG, JPEG & WEBP images.")
-    return ("Select an Image\n\nSelect or drag and drop a PNG, JPG, JPEG or WEBP image.\n\n"
-            "Hit Ctrl+V or ⌘+V to Paste image from Clipboard")
-
-
-def progress_html(message: str, batch_count: str = "") -> str:
-    return f"""
-<div class="ds-progress">
-  <img class="ds-spin" src="{viewer.file_url(str(ASSETS_DIR / 'logo.png')).split('?')[0]}"/>
-  {f'<p class="ds-progress-batch">{batch_count}</p>' if batch_count else ''}
-  <p class="ds-progress-msg">{message}</p>
-  <p class="ds-progress-sub">Working its magic...</p>
 </div>"""
 
 
@@ -286,6 +275,10 @@ def build() -> gr.Blocks:
         dims_state = gr.State({})
         batch_files_state = gr.State([])
         last_result_state = gr.State({})
+        image_state = gr.State(None)          # server path of the loaded image
+        canvas_state = gr.State(canvas.value())  # last canvas value without progress
+        selection_state = gr.State(None)  # mask PNG of the canvas selection (None = whole image)
+        crop_state = gr.State(None)       # canvas crop [x, y, w, h] (None = no crop)
 
         # =================================================================
         # RIGHT DRAWER - MoreOptionsDrawer (only shown on the Upscayl tab)
@@ -293,8 +286,8 @@ def build() -> gr.Blocks:
         with gr.Sidebar(position="right", open=False, width=380, label="More options", elem_id="ds-drawer") as drawer:
             reset_image_btn = gr.Button("Reset Image", variant="primary")
             view_type = gr.Radio([("Lens View", "lens"), ("Slider View", "slider")], value=s["view_type"], label="View")
-            zoom_amount = gr.Slider(100, 1000, value=s["zoom_amount"], step=10, label="Zoom Amount (%)",
-                                    visible=s["view_type"] == "slider")
+            gr.Markdown("Scroll on the canvas to zoom, drag to pan, **0** fit, **1** 100 %, double-click toggles.",
+                        elem_classes="ds-sub")
             stats_box = gr.HTML(stats_html())
 
         # =================================================================
@@ -302,20 +295,20 @@ def build() -> gr.Blocks:
         # Upscayl's sidebar tabs (Upscayl / Settings) and the manager tabs are
         # merged; the left panel lives inside the first tab only.
         # =================================================================
-        status_box = gr.HTML(status_strip(), elem_id="ds-status")  # floats at the right end of the strip
         with gr.Tabs(elem_id="ds-main-tabs") as main_tabs:
             # -------------------------- Upscayl --------------------------
             with gr.Tab("🚀 Upscale", id="studio"):
                 with gr.Row(equal_height=False, elem_id="ds-studio"):
+                    status_box = gr.HTML(status_strip(), elem_id="ds-status")  # floats above the left panel
                     # ---------- left panel: Upscayl's sidebar (UpscaylSteps) ----------
-                    with gr.Column(scale=0, min_width=340, elem_id="ds-sidebar") as sidebar_col:
+                    with gr.Column(scale=0, min_width=384, elem_id="ds-sidebar") as sidebar_col:
                         with gr.Row(elem_id="ds-side-top"):
                             gr.HTML(header_html(), padding=False)
                             collapse_btn = gr.Button("◀", size="sm", scale=0, min_width=34, elem_id="ds-collapse")
                         batch_mode = gr.Checkbox(False, label="Batch Upscale",
                                                  info="Upscale all images in a folder at once")
 
-                        gr.Markdown("STEP 1", elem_classes="ds-step")
+                        gr.HTML(step_head(1, "Source", "The image to upscale"), padding=False)
                         select_image_btn = gr.UploadButton("Select Image", file_types=["image"], variant="primary",
                                                            elem_classes="ds-btn")
                         with gr.Group(visible=False) as folder_group:
@@ -325,8 +318,7 @@ def build() -> gr.Blocks:
                                 select_folder_btn = gr.Button("Select Folder", variant="primary", size="sm")
                                 upload_folder_btn = gr.UploadButton("Upload Folder", file_count="directory", size="sm")
 
-                        gr.Markdown("STEP 2", elem_classes="ds-step")
-                        gr.Markdown("Select AI Model", elem_classes="ds-sub")
+                        gr.HTML(step_head(2, "AI model", "Pick a model, then fine-tune"), padding=False)
                         model_dd = gr.Dropdown(initial_models, value=initial_model, show_label=False, filterable=True,
                                                elem_id="ds-model")
                         browse_models_btn = gr.Button("🎨 Browse models", size="sm")
@@ -338,14 +330,14 @@ def build() -> gr.Blocks:
                                                label=_scale_label(s["scale"], s["use_custom_width"]),
                                                interactive=not s["use_custom_width"])
 
-                        gr.Markdown("STEP 3", elem_classes="ds-step")
+                        gr.HTML(step_head(3, "Output", "Where the result is saved"), padding=False)
                         output_folder = gr.Textbox(output_default, label="Output folder",
                                                    info="Defaults to the app's outputs folder", max_lines=1)
                         with gr.Row():
                             set_output_btn = gr.Button("Set Output Folder", variant="primary", size="sm")
                             open_output_btn = gr.Button("📂 Open", size="sm")
 
-                        gr.Markdown("STEP 4", elem_classes="ds-step")
+                        gr.HTML(step_head(4, "Upscale", "Process with the chosen model"), padding=False)
                         resolution_md = gr.Markdown("", elem_classes="ds-sub")
                         upscayl_btn = gr.Button("Upscale 🚀", variant="primary", size="lg", elem_id="ds-go")
                         stop_btn_side = gr.Button("STOP", variant="stop", visible=False)
@@ -354,7 +346,7 @@ def build() -> gr.Blocks:
                     # ---------- main content ----------
                     with gr.Column(scale=1, elem_id="ds-main"):
                         expand_btn = gr.Button("▶ Show panel", size="sm", visible=False, elem_id="ds-expand")
-                        with gr.Column(visible=not s["onboarded"], elem_classes="ds-card") as onboarding:
+                        with gr.Column(visible=not s["onboarded"], elem_classes=["ds-card", "ds-modal"]) as onboarding:
                             gr.Markdown(
                                 f"## Welcome to {APP_NAME} 🎉\n"
                                 "Each AI backend runs in its own isolated environment, and you choose which models to keep.\n\n"
@@ -367,7 +359,7 @@ def build() -> gr.Blocks:
                                 skip_onboarding_btn = gr.Button("Get Started")
                             quick_log = gr.Textbox(label="Setup log", lines=8, visible=False, autoscroll=True)
 
-                        with gr.Column(visible=False, elem_classes="ds-card") as model_dialog:
+                        with gr.Column(visible=False, elem_classes=["ds-card", "ds-modal", "ds-modal-wide"]) as model_dialog:
                             gr.Markdown("### Select AI Model\nClick a card to select it. Models marked *not downloaded* "
                                         "can be fetched in one click.")
                             model_gallery = gr.Gallery(_preview_gallery(), columns=2, height=520, object_fit="cover",
@@ -377,17 +369,7 @@ def build() -> gr.Blocks:
                                 close_dialog_btn = gr.Button("Close")
                             gallery_pick = gr.State("")
 
-                        image_in = gr.Image(type="filepath", sources=["upload", "clipboard"], show_label=False,
-                                            height="70vh", elem_id="ds-input", placeholder=instructions_md(False),
-                                            buttons=["fullscreen"])
-                        batch_info = gr.Markdown("", visible=False, elem_classes="ds-card")
-                        progress_box = gr.HTML("", visible=False)
-                        stop_btn = gr.Button("STOP", variant="stop", visible=False, elem_id="ds-stop")
-                        compare = viewer.component(visible=False)
-                        with gr.Row(visible=False) as result_row:
-                            result_md = gr.Markdown("")
-                            download_btn = gr.DownloadButton("⬇ Download", size="sm")
-                            open_result_btn = gr.Button("📂 Open Output Folder", size="sm")
+                        cv = canvas.component(canvas.file_url(str(ASSETS_DIR / "logo.png")).split("?")[0])
                         batch_gallery = gr.Gallery(visible=False, columns=4, height=480, label="Upscaled",
                                                    object_fit="contain")
 
@@ -548,7 +530,7 @@ def build() -> gr.Blocks:
             (overwrite, "overwrite"), (turn_off_notifications, "turn_off_notifications"),
             (gpu_id, "gpu_id"), (precision, "precision"), (tta_mode, "tta_mode"), (double_upscayl, "double_upscayl"),
             (model_dd, "selected_model"), (restore_dd, "restore_model"), (view_type, "view_type"),
-            (zoom_amount, "zoom_amount"), (theme_radio, "theme"),
+            (theme_radio, "theme"),
         ]:
             comp.change(persist(key), comp, None, show_progress="hidden", queue=False)
 
@@ -619,71 +601,130 @@ def build() -> gr.Blocks:
 
         model_dd.input(on_model_change, [model_dd, *res_inputs], [scale_step, scale_settings, resolution_md], queue=False)
 
+        # ---------------- canvas helpers ----------------
+        BROWSER_FORMATS = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif"}
+
+        def preview_path(path: str) -> str:
+            """Browsers can't show TIFF/BMP: give the canvas a PNG preview of those."""
+            src = Path(path)
+            if src.suffix.lower() in BROWSER_FORMATS:
+                return path
+            PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+            out = PREVIEW_DIR / f"in-{abs(hash((str(src), src.stat().st_mtime)))}.png"
+            if not out.exists():
+                with Image.open(src) as im:
+                    im = ImageOps.exif_transpose(im)
+                    im.convert("RGBA" if "A" in im.getbands() else "RGB").save(out)
+            return str(out)
+
+        def empty_canvas(batch: bool) -> dict:
+            return canvas.value("empty", batch=bool(batch), reset_view=True)
+
+        def batch_canvas(text: str) -> dict:
+            return canvas.value("batch", text=text, batch=True)
+
         # batch toggle
         def on_batch(batch, remember):
             out = gr.update() if remember else str(DEFAULT_OUTPUT_DIR)
+            c = empty_canvas(batch)
             return (gr.update(visible=not batch), gr.update(visible=batch), gr.update(visible=not batch),
-                    gr.update(visible=not batch), gr.update(visible=batch, value=instructions_md(True) if batch else ""),
-                    out, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+                    out, gr.update(visible=False), c, c, None, {}, "", None, None)
 
         batch_mode.change(on_batch, [batch_mode, remember_output],
-                          [select_image_btn, folder_group, double_upscayl, image_in, batch_info, output_folder,
-                           compare, result_row, batch_gallery], queue=False)
+                          [select_image_btn, folder_group, double_upscayl, output_folder, batch_gallery,
+                           cv, canvas_state, image_state, dims_state, resolution_md, selection_state, crop_state],
+                          queue=False)
 
-        # Step 1: image selection (button or drop/paste on the main area)
-        def on_image_uploaded(path):
-            logit("🖼 Selected Image Path:", path)
-            return path
+        # Step 1: load an image (Select Image button, or drop / paste / open on the canvas)
+        load_outputs = [image_state, dims_state, resolution_md, cv, canvas_state, batch_gallery, last_result_state,
+                        selection_state, crop_state]
 
-        select_image_btn.upload(on_image_uploaded, select_image_btn, image_in, queue=False)
-
-        def on_image_change(path, scale, double, use_cw, cw):
-            if not path:
-                return {}, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+        def load_image(path, name, scale, double, use_cw, cw, cstate):
+            if not path or not is_valid_image(path):
+                gr.Warning("Invalid Image. Please select an image with a valid extension like PNG, JPG, JPEG, JFIF or WEBP.")
+                return gr.update(), gr.update(), gr.update(), cstate, gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
             try:
                 with Image.open(path) as im:
-                    dims = {"w": im.width, "h": im.height}
-            except Exception:
-                gr.Warning("Invalid Image. Please select an image with a valid extension like PNG, JPG, JPEG, JFIF or WEBP.")
-                return {}, "", gr.update(), gr.update(), gr.update()
-            return (dims, _resolution_text(dims, scale, double, use_cw, cw or 0), gr.update(visible=False),
-                    gr.update(visible=True), gr.update(visible=False))
+                    im = ImageOps.exif_transpose(im)
+                    dims = {"w": im.width, "h": im.height, "full": [im.width, im.height]}
+                shown = preview_path(path)
+            except Exception as exc:
+                gr.Warning(f"Invalid Image: {exc}")
+                return gr.update(), gr.update(), gr.update(), cstate, gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
+            logit("🖼 Selected Image Path:", path)
+            c = canvas.value("image", src=shown, name=name or Path(path).name, dims=f"{dims['w']}x{dims['h']}",
+                             reset_view=True)
+            return (path, dims, _resolution_text(dims, scale, double, use_cw, cw or 0), c, c,
+                    gr.update(visible=False), {}, None, None)
 
-        image_in.change(on_image_change, [image_in, scale_step, double_upscayl, use_custom_width, custom_width],
-                        [dims_state, resolution_md, compare, image_in, result_row], queue=False)
+        res_load_inputs = [scale_step, double_upscayl, use_custom_width, custom_width, canvas_state]
+        select_image_btn.upload(lambda p, *a: load_image(p, Path(p).name if p else "", *a),
+                                [select_image_btn, *res_load_inputs], load_outputs, queue=False)
+
+        def on_canvas_upload(scale, double, use_cw, cw, cstate, evt: gr.EventData):
+            data = getattr(evt, "_data", None) or {}
+            return load_image(data.get("path"), data.get("name"), scale, double, use_cw, cw, cstate)
+
+        cv.image_upload(on_canvas_upload, res_load_inputs, load_outputs, queue=False)
+
+        # Selection tools on the canvas: the mask (model applies to the selected pixels only)
+        # and the crop (only that area is output).
+        def on_canvas_selection(evt: gr.EventData):
+            data = getattr(evt, "_data", None) or {}
+            if data.get("path"):
+                logit("✂ Selection", data.get("bbox"))
+            return data.get("path") or None
+
+        cv.selection(on_canvas_selection, None, selection_state, queue=False)
+
+        def on_canvas_crop(dims, scale, double, use_cw, cw, evt: gr.EventData):
+            crop = (getattr(evt, "_data", None) or {}).get("crop")
+            full = (dims or {}).get("full")
+            if not full:
+                return crop, gr.update(), gr.update()
+            d = {"w": crop[2], "h": crop[3], "full": full} if crop else {"w": full[0], "h": full[1], "full": full}
+            return crop, d, _resolution_text(d, scale, double, use_cw, cw or 0)
+
+        cv.crop(on_canvas_crop, [dims_state, scale_step, double_upscayl, use_custom_width, custom_width],
+                [crop_state, dims_state, resolution_md], queue=False)
+
+        def folder_text(path: str, n: int) -> str:
+            return f"Selected folder:\n{path}\n\n{n} image(s) - click Upscale 🚀 to process them all."
 
         def on_pick_folder(current):
             path = native.pick("folder", "Select a folder of images", current or None)
             if not path:
                 gr.Info("No folder selected - you can also paste a path into the box.")
-                return gr.update(), gr.update()
+                return gr.update(), gr.update(), gr.update()
             try:
                 n = len(collect_folder(path))
             except ValueError as exc:
                 gr.Warning(str(exc))
-                return gr.update(), gr.update()
-            return path, gr.update(visible=True, value=f"**Selected folder:** `{path}` ({n} images)")
+                return gr.update(), gr.update(), gr.update()
+            c = batch_canvas(folder_text(path, n))
+            return path, c, c
 
-        select_folder_btn.click(on_pick_folder, folder_path, [folder_path, batch_info])
+        select_folder_btn.click(on_pick_folder, folder_path, [folder_path, cv, canvas_state])
 
         def on_folder_typed(path):
             if not path:
-                return gr.update(value=instructions_md(True))
-            try:
-                n = len(collect_folder(path))
-                return gr.update(value=f"**Selected folder:** `{path}` ({n} images)")
-            except ValueError as exc:
-                return gr.update(value=f"⚠️ {exc}")
+                c = empty_canvas(True)
+            else:
+                try:
+                    c = batch_canvas(folder_text(path, len(collect_folder(path))))
+                except ValueError as exc:
+                    c = batch_canvas(f"⚠️ {exc}")
+            return c, c
 
-        folder_path.submit(on_folder_typed, folder_path, batch_info, queue=False)
-        folder_path.blur(on_folder_typed, folder_path, batch_info, queue=False)
+        folder_path.submit(on_folder_typed, folder_path, [cv, canvas_state], queue=False)
+        folder_path.blur(on_folder_typed, folder_path, [cv, canvas_state], queue=False)
 
         def on_folder_uploaded(files):
-            files = [f for f in (files or []) if Path(f).suffix.lower().lstrip(".") in
-                     {"png", "jpg", "jpeg", "jfif", "webp", "bmp", "tif", "tiff"}]
-            return files, "", gr.update(visible=True, value=f"**Uploaded folder:** {len(files)} images")
+            files = [f for f in (files or []) if is_valid_image(f)]
+            c = batch_canvas(f"Uploaded folder:\n{len(files)} image(s) - click Upscale 🚀 to process them all.")
+            return files, "", c, c
 
-        upload_folder_btn.upload(on_folder_uploaded, upload_folder_btn, [batch_files_state, folder_path, batch_info])
+        upload_folder_btn.upload(on_folder_uploaded, upload_folder_btn, [batch_files_state, folder_path, cv, canvas_state])
 
         # Step 2: model dialog
         browse_models_btn.click(lambda: (gr.update(visible=True), gr.update(value=_preview_gallery())), None,
@@ -721,7 +762,7 @@ def build() -> gr.Blocks:
 
         open_output_btn.click(on_open_folder, output_folder, None, queue=False)
 
-        # ---------------- Step 4: Upscayl ----------------
+        # ---------------- Step 4: Upscale ----------------
         def build_request(model, restore, double, scale, out_dir) -> UpscaleRequest:
             st = settings.load()
             return UpscaleRequest(
@@ -733,32 +774,30 @@ def build() -> gr.Blocks:
                 output_dir=out_dir or str(DEFAULT_OUTPUT_DIR),
             )
 
-        upscale_outputs = [progress_box, stop_btn, stop_btn_side, upscayl_btn, image_in, compare, result_row,
-                           result_md, download_btn, batch_gallery, stats_box, last_result_state]
+        upscale_outputs = [cv, stop_btn_side, upscayl_btn, batch_gallery, stats_box, last_result_state, canvas_state]
 
-        def busy_frame(msg, batch_count=""):
-            return [gr.update(visible=True, value=progress_html(msg, batch_count)), gr.update(visible=True),
-                    gr.update(visible=True), gr.update(value="Upscaling ⏳", interactive=False),
-                    gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(), gr.update(),
-                    gr.update(visible=False), gr.update(), gr.update()]
+        def busy_frame(base, msg, pct=None):
+            return [canvas.with_progress(base, msg, pct), gr.update(visible=True),
+                    gr.update(value="Upscaling ⏳", interactive=False), gr.update(visible=False),
+                    gr.update(), gr.update(), gr.update()]
 
-        def idle_frame(**overrides):
-            frame = dict(progress=gr.update(visible=False), stop=gr.update(visible=False),
-                         stop_side=gr.update(visible=False), go=gr.update(value="Upscale 🚀", interactive=True),
-                         image=gr.update(), compare=gr.update(), row=gr.update(), md=gr.update(), dl=gr.update(),
-                         gallery=gr.update(), stats=gr.update(value=stats_html()), last=gr.update())
+        def idle_frame(base, **overrides):
+            frame = dict(cv=base, stop_side=gr.update(visible=False), go=gr.update(value="Upscale 🚀", interactive=True),
+                         gallery=gr.update(), stats=gr.update(value=stats_html()), last=gr.update(), cstate=base)
             frame.update(overrides)
             return list(frame.values())
 
         def do_upscayl(image_path, batch, folder, batch_files, model, restore, double, scale, out_dir,
-                       view, zoom, request: gr.Request, progress=gr.Progress()):
+                       view, cstate, selection, crop, request: gr.Request):
+            base = dict(cstate or empty_canvas(batch))
+            base["progress"] = None
             if not model:
                 gr.Warning("No model installed yet. Open the Model Manager tab (or use Quick setup) to download one.")
-                yield idle_frame()
+                yield idle_frame(base)
                 return
             if not out_dir:
                 gr.Warning("Please select an output folder first")
-                yield idle_frame()
+                yield idle_frame(base)
                 return
             files: list[Path] = []
             folder_name = ""
@@ -772,18 +811,22 @@ def build() -> gr.Blocks:
                         folder_name = "upload"
                 except ValueError as exc:
                     gr.Warning(str(exc))
-                    yield idle_frame()
+                    yield idle_frame(base)
                     return
                 if not files:
                     gr.Warning("No images found. Please select a folder of images first.")
-                    yield idle_frame()
+                    yield idle_frame(base)
                     return
             elif not image_path:
                 gr.Warning("No image selected. Please select an image to upscale.")
-                yield idle_frame()
+                yield idle_frame(base)
                 return
 
             req = build_request(model, restore, double, scale, out_dir)
+            if not batch:
+                req.mask_path, req.crop = selection or "", crop or None
+            elif selection or crop:
+                gr.Info("Selections and crops apply to single images; batch processes whole images.")
             cancel = threading.Event()
             _cancel[_session(request)] = cancel
             state = {"frac": 0.0, "msg": "Hold on...", "result": None, "error": None, "done": False}
@@ -806,27 +849,26 @@ def build() -> gr.Blocks:
                   f"restore={restore or '-'}", json.dumps({k: v for k, v in req.__dict__.items() if k != 'output_dir'}))
             thread = threading.Thread(target=work, daemon=True)
             thread.start()
-            yield busy_frame("Hold on...")
+            yield busy_frame(base, "Hold on...")
             last = None
             while not state["done"]:
-                time.sleep(0.2)
-                msg = state["msg"]
-                progress(state["frac"], desc=msg)
-                if msg != last:
-                    last = msg
-                    yield busy_frame(msg)
+                time.sleep(0.15)
+                tick = (state["msg"], round(state["frac"] * 200))
+                if tick != last:
+                    last = tick
+                    yield busy_frame(base, state["msg"], state["frac"])
             _cancel.pop(_session(request), None)
 
             err = state["error"]
             if isinstance(err, Cancelled):
                 logit("🛑 Stopped")
                 gr.Info("Upscaling stopped.")
-                yield idle_frame()
+                yield idle_frame(base)
                 return
             if err is not None:
                 logit("❌", f"{type(err).__name__}: {err}")
                 gr.Warning(f"Error: {err}")
-                yield idle_frame()
+                yield idle_frame(base)
                 return
 
             if batch:
@@ -835,13 +877,11 @@ def build() -> gr.Blocks:
                     logit("⚠️", e)
                 if errors:
                     gr.Warning(f"{len(errors)} image(s) failed - see Settings > Logs.")
-                msg = f"**All done!** {len(results)} image(s) saved to `{out_dir_path}`"
                 _toast_ok("Batch upscale finished!")
                 if not settings.load()["turn_off_notifications"]:
                     native.notify(APP_NAME, "Folder upscaled successfully!")
-                yield idle_frame(row=gr.update(visible=True), md=msg,
-                                 dl=gr.update(visible=False),
-                                 gallery=gr.update(visible=True, value=[r.display_output for r in results][:200]),
+                done = batch_canvas(f"All done!\n{len(results)} image(s) saved to\n{out_dir_path}")
+                yield idle_frame(done, gallery=gr.update(visible=True, value=[r.display_output for r in results][:200]),
                                  last={"folder": str(out_dir_path)})
                 return
 
@@ -853,20 +893,26 @@ def build() -> gr.Blocks:
                 _toast_ok("Image upscaled successfully!")
                 if not settings.load()["turn_off_notifications"]:
                     native.notify(APP_NAME, "Image upscaled successfully!")
-            info = (f"**{Path(r.saved_path).name}** · {r.in_size[0]}x{r.in_size[1]} → {r.out_size[0]}x{r.out_size[1]}"
-                    + (f" · {_fmt_duration(r.seconds)}" if r.seconds else ""))
-            yield idle_frame(
-                image=gr.update(visible=False),
-                compare=gr.update(visible=True, value=viewer.value(r.display_input, r.display_output, view, zoom)),
-                row=gr.update(visible=True), md=info,
-                dl=gr.update(visible=True, value=r.display_output),
-                last={"input": r.display_input, "output": r.display_output, "saved": r.saved_path},
+            took = f" · {_fmt_duration(r.seconds)}" if r.seconds else ""
+            if r.model_input and (selection or crop):
+                mw, mh = r.model_input
+                took += f" · model fed {mw}×{mh}" + (f" ({r.model_pixels:,} selected px)" if selection else "")
+                logit("✂ Model input:", f"{mw}x{mh}", f"{r.model_pixels} selected px" if selection else "crop")
+            result = canvas.value(
+                "compare", before=r.display_input, after=r.display_output, name=Path(r.saved_path).name + took,
+                dims=f"{r.in_size[0]}x{r.in_size[1]}", out_dims=f"{r.out_size[0]}x{r.out_size[1]}",
+                # A selection result opens on the slider: the lens shows the original everywhere
+                # but under the cursor, which hid the upscaled region entirely.
+                view="slider" if r.focus else view,
+                download_name=Path(r.saved_path).name, orig=r.orig_input or r.display_input, view_box=r.view_box,
+                focus=r.focus,
             )
+            yield idle_frame(result, last={"input": r.display_input, "output": r.display_output, "saved": r.saved_path})
 
-        upscale_inputs = [image_in, batch_mode, folder_path, batch_files_state, model_dd, restore_dd, double_upscayl,
-                          scale_step, output_folder, view_type, zoom_amount]
+        upscale_inputs = [image_state, batch_mode, folder_path, batch_files_state, model_dd, restore_dd, double_upscayl,
+                          scale_step, output_folder, view_type, canvas_state, selection_state, crop_state]
         upscayl_btn.click(do_upscayl, upscale_inputs, upscale_outputs,
-                                          concurrency_id="gpu", concurrency_limit=1, show_progress="minimal")
+                          concurrency_id="gpu", concurrency_limit=1, show_progress="hidden")
 
         def do_stop(request: gr.Request):
             ev = _cancel.get(_session(request))
@@ -874,7 +920,7 @@ def build() -> gr.Blocks:
                 ev.set()
                 logit("🛑 Stopping")
 
-        stop_btn.click(do_stop, None, None, queue=False)
+        cv.stop(do_stop, None, None, queue=False)
         stop_btn_side.click(do_stop, None, None, queue=False)
 
         def do_open_result(last, out_dir):
@@ -882,27 +928,34 @@ def build() -> gr.Blocks:
             if not native.open_folder(target):
                 gr.Warning(f"Could not open {target}")
 
-        open_result_btn.click(do_open_result, [last_result_state, output_folder], None, queue=False)
+        cv.open_folder(do_open_result, [last_result_state, output_folder], None, queue=False)
 
-        # drawer
-        def on_view(view, zoom, last):
-            upd = gr.update()
-            if last and last.get("output"):
-                upd = gr.update(value=viewer.value(last["input"], last["output"], view, zoom))
-            return gr.update(visible=view == "slider"), upd
+        # Slider / Lens: from the drawer or the canvas toolbar
+        def on_view(view, cstate):
+            c = dict(cstate or {})
+            if c.get("mode") == "compare" and c.get("view") != view:
+                c["view"], c["progress"], c["nonce"] = view, None, None
+                return c, c
+            return gr.update(), gr.update()
 
-        view_type.change(on_view, [view_type, zoom_amount, last_result_state], [zoom_amount, compare], queue=False)
-        zoom_amount.release(lambda v, z, last: on_view(v, z, last)[1], [view_type, zoom_amount, last_result_state],
-                            compare, queue=False)
+        view_type.change(on_view, [view_type, canvas_state], [cv, canvas_state], queue=False)
 
-        def reset_image():
+        def on_canvas_view(evt: gr.EventData):
+            view = (getattr(evt, "_data", None) or {}).get("view", "slider")
+            settings.set("view_type", view)
+            return view
+
+        cv.view(on_canvas_view, None, view_type, queue=False)
+
+        def reset_image(batch):
             logit("🔄 Resetting image paths")
-            return (gr.update(value=None, visible=True), {}, "", gr.update(visible=False), gr.update(visible=False),
-                    gr.update(visible=False), {}, [], "")
+            c = empty_canvas(batch)
+            return None, {}, "", c, c, gr.update(visible=False), {}, [], "", None, None
 
-        reset_image_btn.click(reset_image, None,
-                              [image_in, dims_state, resolution_md, compare, result_row, batch_gallery,
-                               last_result_state, batch_files_state, folder_path], queue=False)
+        reset_image_btn.click(reset_image, batch_mode,
+                              [image_state, dims_state, resolution_md, cv, canvas_state, batch_gallery,
+                               last_result_state, batch_files_state, folder_path, selection_state, crop_state],
+                              queue=False)
 
         # onboarding / quick setup
         def skip_onboarding():

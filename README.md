@@ -18,6 +18,33 @@ built-in model manager. Every AI backend runs in its own isolated Python environ
 - **Environment manager** - install, verify (self-test), update, repair or remove each backend's venv.
 - **Jobs & Diagnostics** - job history (SQLite), scratch cleanup, worker logs, health, `nvidia-smi`, hard restart.
 
+### Selection tools: process only part of the image
+
+The floating one-column palette on the right of the canvas holds PhotoCraft's selection tools. Select the
+part of the image you want changed and **only that part is fed to the model**: the input is cropped to the
+selection's tight bounding box, and any unselected pixels inside that box are replaced by a fill made only
+from the selected colours, so nothing you left out reaches the model. The result is blended back through the
+selection's edge, so **unselected pixels stay exactly the original**, just resized to the output scale.
+The image info under the left panel reports what the model got (`model fed 80×80 (5,140 selected px)`), and a
+selection result opens in the slider view with the divider just left of the selection.
+
+| Tool | Key | Use |
+|---|---|---|
+| Move | V | Pan (also hold Space with any tool) |
+| Rectangular / Elliptical / Single Row / Single Column Marquee | M | Drag a box or ellipse (Shift = square, Alt = from centre while dragging) |
+| Lasso / Polygonal Lasso / Magnetic Lasso | L | Freehand; click points (Enter or double-click closes); edge-snapping live wire (Width, Contrast, Frequency) |
+| Object Selection | W | Drag a rectangle around an object (GrabCut) |
+| Quick Selection | W | Paint over an area; it grows to the edges (`[` `]` brush size) |
+| Magic Wand | W | Click a colour (Tolerance, Contiguous, Anti-alias) |
+| Crop | C | Choose the area that is output; Enter commits, Esc cancels |
+| Eyedropper | I | Selects every pixel similar to the clicked colour (Color Range, Fuzziness) |
+
+Shift adds to the selection, Alt subtracts, Shift+Alt intersects (or use the mode buttons in the options bar).
+Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. Shift+key cycles the tools sharing a key.
+The algorithms are a JavaScript port of PhotoCraft's (`app/studio/js/selection_algo.js`): Boykov–Kolmogorov
+max-flow, GrabCut with GMMs, the Quick Selection min-cut fitted to Photoshop, and the Mortensen–Barrett live
+wire. The heavy cuts run in a Web Worker.
+
 ### Backends
 
 | Backend | Runs on | Engine | Models |
@@ -35,9 +62,12 @@ upstream ncnn wheel, so the same models run with newer Vulkan kernels (fp16/bf16
 2. On first launch click **⚡ Quick setup**: it installs the small NCNN backend (~300 MB) and the *Upscayl Standard*
    model. For PyTorch models open **Model Manager**, select models (or **⭐ Select recommended**) and click
    **Download selected**; the backend environment is installed automatically (PyTorch + CUDA is ~5 GB).
-3. In the **🚀 Upscale** tab's left panel: **Select Image** (or drop / paste it in the main area), pick a model, optionally a *Restore first*
-   model, set the scale and output folder, and click **Upscale 🚀**. Use **Batch Upscale** for a folder.
-4. Compare with the slider (hover to zoom) or switch to **Lens View** in the right-hand drawer.
+3. In the **🚀 Upscale** tab, the panel floating over the canvas walks through four steps: **1 Source**
+   (**Select Image**, or drop / paste it on the canvas), **2 AI model** (model, optional *Restore first*, Double
+   Upscale, scale), **3 Output** (folder) and **4 Upscale**. Use **Batch Upscale** for a folder. The worker status
+   sits above the panel; the file name and size sit below it.
+4. Optionally select part of the image with the tools on the right (see above), then click **Upscale 🚀**.
+5. Compare with the **Slider** or **Lens** buttons under the canvas; scroll to zoom, drag to pan.
 
 Results are written to the output folder (default `app/outputs`). Weights live in `app/models/<backend>/` and are
 never stored inside a venv, so **Repair**/**Remove** on an environment keeps them.
@@ -123,6 +153,9 @@ curl -s -N $URL/gradio_api/call/upscale/$EVENT
 ## Credits & licenses
 
 - UI and behaviour ported from [Upscayl](https://github.com/upscayl/upscayl) (AGPL-3.0) - this project is AGPL-3.0 too.
+- The selection tools copy [PhotoCraft](https://github.com/storytold/photocraft)'s toolbar and port its selection
+  algorithms to JavaScript (MIT OR Apache-2.0), with its icons (Lucide, ISC; PhotoCraft glyphs, MIT; one CC BY 3.0
+  glyph) - see `app/assets/photocraft-icons/ATTRIBUTION.md`.
 - [Tencent ncnn](https://github.com/Tencent/ncnn), [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD-3, see
   `Real-ESRGAN_LICENSE.txt`), [spandrel](https://github.com/chaiNNer-org/spandrel), and every model author listed in
   the Model Manager. Several models are **non-commercial** (CC BY-NC-SA 4.0 or research licenses); the Model Manager
